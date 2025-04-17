@@ -1,65 +1,4 @@
 
-from tokenizers import Tokenizer
-from torch.utils.data import Dataset
-import torch
-# import json
-from datasets import load_dataset
-
-# class BPETokenizerWrapper:
-#     def __init__(self, tokenizer_path, max_len=128):
-#         self.tokenizer = Tokenizer.from_file(tokenizer_path)
-#         self.max_len = max_len
-#         self.pad_token_id = self.tokenizer.token_to_id("[PAD]")
-#         self.sos_token_id = self.tokenizer.token_to_id("[SOS]")
-#         self.eos_token_id = self.tokenizer.token_to_id("[EOS]")
-
-#     def encode(self, text):
-#         ids = self.tokenizer.encode(text).ids
-#         ids = [self.sos_token_id] + ids[:self.max_len - 2] + [self.eos_token_id]
-#         return torch.tensor(ids + [self.pad_token_id] * (self.max_len - len(ids)))
-
-#     def decode(self, ids):
-#         ids = ids.tolist()
-#         if self.eos_token_id in ids:
-#             ids = ids[:ids.index(self.eos_token_id)]
-#         return self.tokenizer.decode([i for i in ids if i != self.pad_token_id and i != self.sos_token_id])
-
-#     def batch_encode(self, texts):
-#         return torch.stack([self.encode(t) for t in texts])
-
-# class SummarizationDataset(Dataset):
-#     def __init__(self, articles, summaries, tokenizer):
-#         self.articles = articles
-#         self.summaries = summaries
-#         self.tokenizer = tokenizer
-
-#     def __len__(self):
-#         return len(self.articles)
-
-#     def __getitem__(self, idx):
-#         src = self.tokenizer.encode(self.articles[idx])
-#         tgt = self.tokenizer.encode(self.summaries[idx])
-#         return src, tgt
-
-# def collate_fn(batch):
-#     src_batch, tgt_batch = zip(*batch)
-#     return torch.stack(src_batch), torch.stack(tgt_batch)
-
-# def generate_json_from_cnn_dailymail(train_path="train_data.json", test_path="test_data.json"):
-#     dataset = load_dataset("cnn_dailymail", "3.0.0")
-#     train_articles = dataset["train"]["article"] + dataset["validation"]["article"]
-#     train_summaries = dataset["train"]["highlights"] + dataset["validation"]["highlights"]
-#     test_articles = dataset["test"]["article"]
-#     test_summaries = dataset["test"]["highlights"]
-
-#     with open(train_path, "w", encoding="utf-8") as f:
-#         json.dump({"articles": train_articles, "summaries": train_summaries}, f, ensure_ascii=False)
-
-#     with open(test_path, "w", encoding="utf-8") as f:
-#         json.dump({"articles": test_articles, "summaries": test_summaries}, f, ensure_ascii=False)
-
-#     print(f"Saved {len(train_articles)} training and {len(test_articles)} test samples.")
-
 from torch.utils.data import Dataset,DataLoader
 import torch
 from datasets import load_dataset
@@ -75,6 +14,7 @@ def set_seed(seed=42):
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
 
 # 1. Dataset Processing
 class CNNDataset(Dataset):
@@ -126,17 +66,42 @@ class CNNDataset(Dataset):
         return len(self.data)
 
 # 2. Collate function
-def collate_fn(batch):
-    """Convert list of dicts to dict of tensors (handles existing tensors)"""
-    def _prepare_tensor(data):
-        if not isinstance(data, torch.Tensor):
-            data = torch.tensor(data, dtype=torch.long)
-        return data.clone().detach()
 
+def collate_fn(batch, pad_idx):
+    """
+    Enhanced collate function with proper padding handling.
+    
+    Args:
+        batch: List of samples (each sample is a dict)
+        pad_idx: Padding token ID
+    
+    Returns:
+        Dictionary of padded tensors with consistent shapes
+    """
+    # Extract all sequences
+    input_ids = [torch.as_tensor(sample["input_ids"]) for sample in batch]
+    labels = [torch.as_tensor(sample["labels"]) for sample in batch]
+    
+    # Get max lengths in this batch
+    max_input_len = max(len(seq) for seq in input_ids)
+    max_label_len = max(len(seq) for seq in labels)
+    
+    # Pad sequences with proper values
+    padded_inputs = torch.full((len(batch), max_input_len), pad_idx, dtype=torch.long)
+    padded_labels = torch.full((len(batch), max_label_len), pad_idx, dtype=torch.long)
+    
+    # Fill tensors with actual data
+    for i, (inp, lbl) in enumerate(zip(input_ids, labels)):
+        padded_inputs[i, :len(inp)] = inp
+        padded_labels[i, :len(lbl)] = lbl
+    
+    # Create attention mask (1 for real tokens, 0 for padding)
+    attention_mask = (padded_inputs != pad_idx).float()
+    
     return {
-        "input_ids": torch.stack([_prepare_tensor(x["input_ids"]) for x in batch]),
-        "labels": torch.stack([_prepare_tensor(x["labels"]) for x in batch]),
-        "attention_mask": torch.stack([_prepare_tensor(x["attention_mask"]) for x in batch])
+        "input_ids": padded_inputs,
+        "labels": padded_labels,
+        "attention_mask": attention_mask
     }
 
 # 3. Define seed for worker in data loading process
@@ -159,7 +124,7 @@ def get_train_loader(tokenizer, batch_size=64, num_workers=2, shuffle=True):
         num_workers=num_workers,
         worker_init_fn=seed_worker,
         generator=generator,
-        collate_fn=collate_fn
+        collate_fn=lambda b: collate_fn(b,pad_idx=1)
     )
 
 # 4. Get Val Loader
@@ -175,7 +140,7 @@ def get_val_loader(tokenizer, batch_size=64, num_workers=2):
         num_workers=num_workers,
         worker_init_fn=seed_worker,
         generator=generator,
-        collate_fn=collate_fn
+        collate_fn=lambda b: collate_fn(b,pad_idx=1)
     )
     
 # 5. Get Test Loader
@@ -191,5 +156,5 @@ def get_test_loader(tokenizer, batch_size=64, num_workers=2):
         num_workers=num_workers,
         worker_init_fn=seed_worker,
         generator=generator,
-        collate_fn=collate_fn
+        collate_fn=lambda b: collate_fn(b,pad_idx=1)
     )
