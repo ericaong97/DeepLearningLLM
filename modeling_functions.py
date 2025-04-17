@@ -113,9 +113,6 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
             history['rougeL'].append(rouge_stats['rougeL_mean'])
             history['learning_rate'].append(optimizer.param_groups[0]['lr'])
             history['teacher_forcing_ratio'].append(tf_ratio)
-            
-            # Global step increments by batches processed this epoch
-            history['global_step'] += len(train_loader)
 
             # Epoch summary
             print(f'\nEpoch {epoch+1}/{num_epochs} Summary:')
