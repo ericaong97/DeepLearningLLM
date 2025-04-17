@@ -7,13 +7,12 @@ from data_utils import (
 )
 from baseline_transformer_architecture import create_small_transformer
 
-from modeling_vis_functions import (
-    train_transformer_teacher_forcing,
-    TeacherForcingScheduler
+from modeling_functions import (
+    train_transformer_teacher_forcing
 )
 
 from optimizer_scheduler import (
-    get_optimizer, get_plateau_scheduler
+    get_optimizer, get_plateau_scheduler, linear_teacher_scheduler
 )
 from tokenizers import Tokenizer
 
@@ -54,10 +53,11 @@ train_loader = get_train_loader(tokenizer=tokenizer_20)
 val_loader = get_val_loader(tokenizer=tokenizer_20)
 
 # 5. Define criterion
-# ignore the padding index
+# It ignores the padding index
 transformer_criterion = torch.nn.CrossEntropyLoss(ignore_index=1)
 
 # 6. Training Loop
+# please change the filename for your experiment
 history = train_transformer_teacher_forcing(
     model=base_model,
     train_loader=train_loader,
@@ -65,13 +65,12 @@ history = train_transformer_teacher_forcing(
     optimizer=get_optimizer(base_model),
     criterion=transformer_criterion,
     plateau_scheduler=get_plateau_scheduler(get_optimizer(base_model)),
-    teacher_forcing_scheduler=TeacherForcingScheduler(),
+    teacher_forcing_scheduler=linear_teacher_scheduler,
     tokenizer=tokenizer_20,
     device=device,
     pad_idx=tokenizer_20.token_to_id("[PAD]"),
     clip_norm=2.0,
     num_epochs=10,
     max_length_generate=40,
-    initial_teacher_forcing_ratio=0.9,
-    filename='baseline_results'
+    filename='test_baseline'
 )
