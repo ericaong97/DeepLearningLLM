@@ -23,43 +23,50 @@ def visualize_training_dynamics(history, save_path=None):
         history: Dictionary containing training history
         save_path: Optional path to save the figure
     """
-    plt.figure(figsize=(12, 10))
+    # Set larger font sizes
+    plt.rcParams.update({
+        'font.size': 12,
+        'axes.titlesize': 14,
+        'axes.labelsize': 12,
+        'xtick.labelsize': 11,
+        'ytick.labelsize': 11,
+        'legend.fontsize': 11
+    })
+    
+    plt.figure(figsize=(10, 8))
     epochs = np.arange(1, len(history['train_loss']) + 1)
     
     # Create main axis for loss
     ax1 = plt.subplot(3, 1, 1)
-    ax1.plot(epochs, history['train_loss'], 'b-', label='Train Loss')
-    ax1.plot(epochs, history['val_loss'], 'r-', label='Val Loss')
-    ax1.set_ylabel('Loss')
-    ax1.set_title('Training Dynamics Analysis')
+    ax1.plot(epochs, history['train_loss'], 'b-', linewidth=2, label='Train Loss')
+    ax1.plot(epochs, history['val_loss'], 'r-', linewidth=2, label='Val Loss')
+    ax1.set_ylabel('Loss', fontweight='bold')
+    ax1.set_title('Training Dynamics Analysis', fontweight='bold')
     ax1.legend(loc='upper right')
-    ax1.grid(True)
     
     # Create twin axis for learning rate (log scale)
     ax2 = ax1.twinx()
-    ax2.plot(epochs, history['learning_rate'], 'g--', label='Learning Rate')
+    ax2.plot(epochs, history['learning_rate'], 'g--', linewidth=2, label='Learning Rate')
     ax2.set_yscale('log')
-    ax2.set_ylabel('Learning Rate (log)')
+    ax2.set_ylabel('Learning Rate (log)', fontweight='bold')
     ax2.legend(loc='upper left')
     
     # Teacher forcing ratio plot
-    plt.subplot(3, 1, 2)
-    plt.plot(epochs, history['teacher_forcing_ratio'], 'm-', marker='o')
-    plt.ylabel('Teacher Forcing Ratio')
-    plt.xlabel('Epoch')
-    plt.grid(True)
-    plt.ylim(0, 1)
+    ax3 = plt.subplot(3, 1, 2)
+    ax3.plot(epochs, history['teacher_forcing_ratio'], 'm-', marker='o', markersize=6, linewidth=2)
+    ax3.set_ylabel('Teacher Forcing Ratio', fontweight='bold')
+    ax3.set_xlabel('Epoch', fontweight='bold')
+    ax3.set_ylim(0, 1)
     
     # ROUGE scores plot (if any non-zero values)
     if any(v > 0 for v in history['rouge1'] + history['rouge2'] + history['rougeL']):
-        plt.subplot(3, 1, 3)
-        plt.plot(epochs, history['rouge1'], label='ROUGE-1')
-        plt.plot(epochs, history['rouge2'], label='ROUGE-2')
-        plt.plot(epochs, history['rougeL'], label='ROUGE-L')
-        plt.ylabel('ROUGE Score')
-        plt.xlabel('Epoch')
-        plt.legend()
-        plt.grid(True)
+        ax4 = plt.subplot(3, 1, 3)
+        ax4.plot(epochs, history['rouge1'], linewidth=2, label='ROUGE-1')
+        ax4.plot(epochs, history['rouge2'], linewidth=2, label='ROUGE-2')
+        ax4.plot(epochs, history['rougeL'], linewidth=2, label='ROUGE-L')
+        ax4.set_ylabel('ROUGE Score', fontweight='bold')
+        ax4.set_xlabel('Epoch', fontweight='bold')
+        ax4.legend()
     
     plt.tight_layout()
     
@@ -147,6 +154,7 @@ def visualize_aaai_twocolumn(history, save_path='training_plot.png'):
 # MAIN EXECUTION BLOCK (for standalone usage)
 # ==============================================
 if __name__ == "__main__":
-    # Example usage when run directly
+    # Example usage when run directly: please change to your file name and desired picture name for output
     history = load_history("updated_baseline_history.json")
-    visualize_aaai_twocolumn(history, save_path="sample_training_plot_2.png")
+    # visualize_aaai_twocolumn(history, save_path="sample_training_plot_2.png")
+    visualize_training_dynamics(history, save_path="baseline_losses_wide.png")
