@@ -9,3 +9,5 @@ transformers
 tqdm
 tokenizers
 rouge_score
+ipython
+ipykernels
