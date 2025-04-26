@@ -17,7 +17,8 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
                                     optimizer, criterion, plateau_scheduler,
                                     teacher_forcing_scheduler, tokenizer, device, 
                                     pad_idx, clip_norm=2.0, num_epochs=10, max_length_generate=40,
-                                    filename='result',checkpoint_interval=2):
+                                    filename='result', checkpoint_interval=2, 
+                                    use_early_stopping=False, patience=3, min_delta=0.0001):
     # Initialize history tracking
     history = {
         'train_loss': [],
@@ -29,6 +30,11 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
         'teacher_forcing_ratio': [],
         'global_step': 0
     }
+
+    # Early stopping variables
+    best_val_loss = float('inf')
+    early_stopping_counter = 0
+    best_model_path = f"{filename}_best_model.pt"
 
     checkpoint_file = f"{filename}_checkpoint.pt"
     start_epoch = 0
@@ -51,6 +57,9 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
         optimizer.load_state_dict(checkpoint['optimizer_state'])
         history = checkpoint['history']
         start_epoch = checkpoint['epoch'] + 1
+        if use_early_stopping and 'best_val_loss' in checkpoint:
+            best_val_loss = checkpoint['best_val_loss']
+            early_stopping_counter = checkpoint['early_stopping_counter']
         print(f"Resuming training from epoch {start_epoch}")
 
     try:
@@ -91,11 +100,6 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
                 # Learning rate warmup
                 if history['global_step'] < warmup_steps:
                     warmup_scheduler.step()
-                    
-                    # Add this print to monitor LR during warmup
-                    # if batch_idx % 500 == 0:
-                    #     current_lr = optimizer.param_groups[0]['lr']
-                    #     print(f"Step {history['global_step']}: LR = {current_lr:.2e}, Batch Loss = {loss.item():.4f}")
 
             # Validation phase
             avg_val_loss, rouge_stats = validate_transformer(
@@ -116,31 +120,64 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
 
             # Epoch summary
             print(f'\nEpoch {epoch+1}/{num_epochs} Summary:')
-            print(f'Train Loss: {history["train_loss"][-1]:.4f} | Val Loss: {history["val_loss"][-1]:.4f}')  # Added [-1] to get last element
+            print(f'Train Loss: {history["train_loss"][-1]:.4f} | Val Loss: {history["val_loss"][-1]:.4f}')
             print(f'ROUGE Scores: {rouge_stats["rouge1_mean"]:.4f}/{rouge_stats["rouge2_mean"]:.4f}/{rouge_stats["rougeL_mean"]:.4f}')
-            print(f'Learning Rate: {history["learning_rate"][-1]:.2e} | TF Ratio: {tf_ratio:.2f}')  # Added [-1]
+            print(f'Learning Rate: {history["learning_rate"][-1]:.2e} | TF Ratio: {tf_ratio:.2f}')
+
+            # Early stopping check
+            if use_early_stopping:
+                if avg_val_loss < best_val_loss - min_delta:
+                    best_val_loss = avg_val_loss
+                    early_stopping_counter = 0
+                    # Save best model
+                    torch.save(model.state_dict(), best_model_path)
+                    print(f"New best model saved with validation loss: {best_val_loss:.4f}")
+                else:
+                    early_stopping_counter += 1
+                    print(f"Early stopping counter: {early_stopping_counter}/{patience}")
+                    if early_stopping_counter >= patience:
+                        print(f"Early stopping triggered after {epoch+1} epochs")
+                        break
 
             # Save checkpoint
             if (epoch + 1) % checkpoint_interval == 0:
-                torch.save({
+                checkpoint_data = {
                     'epoch': epoch,
                     'model_state': model.state_dict(),
                     'optimizer_state': optimizer.state_dict(),
                     'history': history,
-                }, checkpoint_file)
+                }
+                if use_early_stopping:
+                    checkpoint_data.update({
+                        'best_val_loss': best_val_loss,
+                        'early_stopping_counter': early_stopping_counter
+                    })
+                torch.save(checkpoint_data, checkpoint_file)
 
     except Exception as e:
         print(f"Training interrupted: {str(e)}")
-        torch.save({
+        checkpoint_data = {
             'epoch': epoch,
             'model_state': model.state_dict(),
             'optimizer_state': optimizer.state_dict(),
             'history': history,
-        }, f"{filename}_emergency.pt")
+        }
+        if use_early_stopping:
+            checkpoint_data.update({
+                'best_val_loss': best_val_loss,
+                'early_stopping_counter': early_stopping_counter
+            })
+        torch.save(checkpoint_data, f"{filename}_emergency.pt")
         raise
 
     # Final save
     torch.save(model.state_dict(), f"{filename}_final_model.pt")
+    
+    # If using early stopping, load the best model
+    if use_early_stopping and os.path.exists(best_model_path):
+        print(f"Loading best model with validation loss: {best_val_loss:.4f}")
+        model.load_state_dict(torch.load(best_model_path))
+    
     with open(f"{filename}_history.json", 'w') as f:
         json.dump(history, f, indent=4)
     return history
