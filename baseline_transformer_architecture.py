@@ -1,3 +1,6 @@
+"""
+baseline_transformer_architecture.py - To create baseline transformer model with teacher forcing
+"""
 
 import torch
 import torch.nn as nn
@@ -23,8 +26,7 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 # 2. Transformer architecture
-# Changed the default activation function to GELU
-# Added layer normalization before transformer layers to improve training stability
+# activation function ReLU, without Pre-LayerNorm 
 class Baseline_Transformer(nn.Module):
     def __init__(self, d_model=512, nhead=8, num_encoder_layers=4,
                 num_decoder_layers=4, dim_feedforward=2048, 

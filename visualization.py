@@ -1,5 +1,5 @@
 """
-training_visualization.py - Visualization utilities for training metrics
+visualization.py - Visualization utilities for training metrics
 """
 import matplotlib.pyplot as plt
 import numpy as np

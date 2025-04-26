@@ -1,3 +1,6 @@
+"""
+baseline_model_run.py - How to use all modules for model training
+"""
 # import libraries and modules
 import torch
 from data_utils import (
@@ -70,7 +73,7 @@ history = train_transformer_teacher_forcing(
     device=device,
     pad_idx=tokenizer_20.token_to_id("[PAD]"),
     clip_norm=2.0,
-    num_epochs=10,
+    num_epochs=5,
     max_length_generate=40,
     filename='test_baseline'
 )
