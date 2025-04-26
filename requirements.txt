@@ -1,0 +1,11 @@
+torch
+datasets
+torchvision
+numpy
+pandas
+matplotlib
+scikit-learn
+transformers
+tqdm
+tokenizers
+rouge-scorep
