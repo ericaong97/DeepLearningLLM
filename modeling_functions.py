@@ -21,7 +21,9 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
                                     teacher_forcing_scheduler, tokenizer, device, 
                                     pad_idx, clip_norm=2.0, num_epochs=10, max_length_generate=40,
                                     filename='result', checkpoint_interval=2, 
-                                    use_early_stopping=False, patience=3, min_delta=0.0001):
+                                    use_early_stopping=False, patience=3, min_delta=0.0001,
+                                    use_weight_pruning=False, pruning_threshold=0.01, 
+                                    pruning_start_epoch=2, pruning_frequency=1):
     # Initialize history tracking
     history = {
         'train_loss': [],
@@ -31,7 +33,8 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
         'rougeL': [],
         'learning_rate': [],
         'teacher_forcing_ratio': [],
-        'global_step': 0
+        'global_step': 0,
+        'pruning_ratio': []  # Track percentage of weights pruned
     }
 
     # Early stopping variables
@@ -55,7 +58,7 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
     # Load checkpoint if exists
     if os.path.exists(checkpoint_file):
         print(f"Loading checkpoint from {checkpoint_file}...")
-        checkpoint = torch.load(checkpoint_file)
+        checkpoint = torch.load(checkpoint_file, weights_only=False)
         model.load_state_dict(checkpoint['model_state'])
         optimizer.load_state_dict(checkpoint['optimizer_state'])
         history = checkpoint['history']
@@ -64,6 +67,32 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
             best_val_loss = checkpoint['best_val_loss']
             early_stopping_counter = checkpoint['early_stopping_counter']
         print(f"Resuming training from epoch {start_epoch}")
+
+    # Progressive magnitude pruning with masking
+    def prune_weights(model, target_sparsity):
+        total_weights = 0
+        pruned_weights = 0
+        for name, param in model.named_parameters():
+            if 'weight' in name and param.requires_grad:
+                # Flatten param and compute threshold for top-k pruning
+                param_data = param.data.view(-1)
+                k = int(target_sparsity * param_data.numel())
+                if k == 0:
+                    continue
+                # kthvalue returns k-th smallest, so we want to prune the k smallest
+                threshold, _ = torch.kthvalue(param_data.abs(), k)
+                mask = (param.abs() >= threshold).float()
+                # Apply mask to weights
+                param.data *= mask
+
+                # Instead of register_buffer, store mask as a model attribute
+                mask_name = f"{name.replace('.', '_')}_mask"
+                setattr(model, mask_name, mask)  # Store mask as an attribute of the model
+
+                total_weights += mask.numel()
+                pruned_weights += mask.numel() - mask.sum().item()
+        
+        return pruned_weights / total_weights if total_weights > 0 else 0
 
     try:
         for epoch in range(start_epoch, num_epochs):
@@ -95,7 +124,12 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_norm)
                 optimizer.step()
-                
+                # Reapply pruning masks after optimizer step
+                for name, param in model.named_parameters():
+                    mask_name = f"{name.replace('.', '_')}_mask"
+                    if hasattr(param, mask_name):
+                        mask = getattr(param, mask_name)
+                        param.data *= mask
                 # Update tracking
                 epoch_train_loss += loss.item()
                 history['global_step'] += 1
@@ -103,6 +137,13 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
                 # Learning rate warmup
                 if history['global_step'] < warmup_steps:
                     warmup_scheduler.step()
+
+            # Apply weight pruning if enabled and after specified start epoch
+            pruning_ratio = 0.0
+            if use_weight_pruning and epoch >= pruning_start_epoch and epoch % pruning_frequency == 0:
+                pruning_ratio = prune_weights(model, pruning_threshold)
+                print(f"Applied pruning: {pruning_ratio:.2%} of weights pruned")
+            history['pruning_ratio'].append(pruning_ratio)
 
             # Validation phase
             avg_val_loss, rouge_stats = validate_transformer(
@@ -126,6 +167,8 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
             print(f'Train Loss: {history["train_loss"][-1]:.4f} | Val Loss: {history["val_loss"][-1]:.4f}')
             print(f'ROUGE Scores: {rouge_stats["rouge1_mean"]:.4f}/{rouge_stats["rouge2_mean"]:.4f}/{rouge_stats["rougeL_mean"]:.4f}')
             print(f'Learning Rate: {history["learning_rate"][-1]:.2e} | TF Ratio: {tf_ratio:.2f}')
+            if use_weight_pruning:
+                print(f'Pruning Ratio: {pruning_ratio:.2%}')
 
             # Early stopping check
             if use_early_stopping:
