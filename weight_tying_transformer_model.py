@@ -1,33 +1,9 @@
-"""
-baseline_transformer_architecture.py - To create baseline transformer model with teacher forcing
-"""
-
 import torch
 import torch.nn as nn
 import random
+from baseline_transformer_architecture import PositionalEncoding
 
-# 1. Positional encoding
-# based on Attention is All You Need Paper
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, dropout, max_len=5000):
-        super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
-
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-torch.log(torch.tensor(10000.0)) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer('pe', pe)
-
-    def forward(self, x):
-        x = x + self.pe[:x.size(0), :]
-        return self.dropout(x)
-
-# 2. Transformer architecture
-# activation function ReLU, without Pre-LayerNorm 
-class Baseline_Transformer(nn.Module):
+class weight_tying_Transformer(nn.Module):
     def __init__(self, d_model=512, nhead=8, num_encoder_layers=4,
                 num_decoder_layers=4, dim_feedforward=2048, 
                 dropout=0.1, vocab_size=20000):
@@ -54,6 +30,26 @@ class Baseline_Transformer(nn.Module):
         
         # Final projection
         self.projection = nn.Linear(d_model, vocab_size)
+        # Tie weights: projection ↔ target embedding
+        self.projection.weight = self.embedding_tgt.weight
+        # This ties the weights of the projection to the target embedding layer
+
+        self._init_weights()
+
+
+    def _init_weights(self):
+        nn.init.xavier_uniform_(self.embedding_tgt.weight)
+        nn.init.xavier_uniform_(self.embedding_src.weight)
+        nn.init.constant_(self.projection.bias, 0.0)
+        for module in self.modules():
+            if isinstance(module, nn.Linear) and module is not self.projection:
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+            elif isinstance(module, nn.LayerNorm):
+                nn.init.constant_(module.bias, 0)
+                nn.init.constant_(module.weight, 1.0)
+        
 
     def forward(self, src, tgt, src_key_padding_mask=None, 
                 tgt_mask=None, tgt_key_padding_mask=None,
@@ -160,10 +156,10 @@ class Baseline_Transformer(nn.Module):
         return mask.masked_fill(mask == 1, float('-inf'))
     
 # 3. Create transformer
-def create_small_transformer(d_model=512, nhead=8, num_encoder_layers=4,
+def create_small_weight_tied_transformer(d_model=512, nhead=8, num_encoder_layers=4,
                         num_decoder_layers=4, dim_feedforward=2048, 
                         dropout=0.1, vocab_size=20000):
-    return Baseline_Transformer(
+    return weight_tying_Transformer(
         d_model=d_model,
         nhead=nhead,
         num_encoder_layers=num_encoder_layers,
