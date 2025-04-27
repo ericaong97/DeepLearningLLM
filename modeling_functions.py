@@ -55,7 +55,7 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
     # Load checkpoint if exists
     if os.path.exists(checkpoint_file):
         print(f"Loading checkpoint from {checkpoint_file}...")
-        checkpoint = torch.load(checkpoint_file)
+        checkpoint = torch.load(checkpoint_file, weights_only=False)
         model.load_state_dict(checkpoint['model_state'])
         optimizer.load_state_dict(checkpoint['optimizer_state'])
         history = checkpoint['history']
@@ -81,14 +81,14 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
                 mask = (param.abs() >= threshold).float()
                 # Apply mask to weights
                 param.data *= mask
-                # Register or update mask buffer
+
+                # Instead of register_buffer, store mask as a model attribute
                 mask_name = f"{name.replace('.', '_')}_mask"
-                if hasattr(param, mask_name):
-                    setattr(param, mask_name, mask)
-                else:
-                    param.register_buffer(mask_name, mask)
+                setattr(model, mask_name, mask)  # Store mask as an attribute of the model
+
                 total_weights += mask.numel()
                 pruned_weights += mask.numel() - mask.sum().item()
+        
         return pruned_weights / total_weights if total_weights > 0 else 0
 
     try:
