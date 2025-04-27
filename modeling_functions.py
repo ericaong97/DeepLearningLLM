@@ -1,3 +1,6 @@
+"""
+modeling_functions.py - Training and Inference Functions
+"""
 import torch
 import torch.nn.functional as F
 from tqdm.auto import tqdm

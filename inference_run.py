@@ -1,3 +1,6 @@
+"""
+inference_run.py - How to run inference
+"""
 # libraries for inference
 import torch
 import json
