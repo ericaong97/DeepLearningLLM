@@ -50,15 +50,16 @@ We use ROUGE F1 scores for evaluation:
 ## Project Structure
 ```text
 .
-├── cnn_bpe_tokenizer_20k.json           # Generated 20K tokens with BPE tokenization
+├── cnn_bpe_tokenizer_20k.json            # Generated 20K tokens with BPE tokenization
 ├── baseline_transformer_architecture.py  # Transformer model definition
-├── data_utils.py                        # Data pipelines and loaders
-├── optimizer_scheduler.py               # Training schedules and optimizers
-├── modeling_functions.py                # Core training/inference logic
-├── baseline_model_run.py                # Sample baseline code execution
-├── visualization.py                    # Performance metrics plotting
-├── inference_run.py                    # Sample inference ROUGE generation
-└── baseline_outputs/                    # Example generated results
+├── data_utils.py                         # Data pipelines and loaders
+├── optimizer_scheduler.py                # Training schedules and optimizers
+├── modeling_functions.py                 # Core training/inference logic
+├── run_***.py                            # Run individual experiments
+├── visualization.py                      # Performance metrics plotting
+├── inference_run.py                      # Sample inference ROUGE generation
+└── histories/                            # Folder for training history
+└── plots/                                # Folder for generated training dynamics plots
 ```
 
 ## Module Documentation
@@ -100,10 +101,19 @@ We use ROUGE F1 scores for evaluation:
 ```bash
 python baseline_model_run.py
 ```
-2. Run visualization
+2. Run one the experiments
+```bash
+python run_data_augmentation.py
+python run_label_smoothing.py
+python run_weight_decay.py
+python run_weight_pruning.py
+python run_weight_tying.py
+```
+3. Run visualization. You can input the path to the history file and the path to save visualization inside `visualization.py`
 ```bash
 python visualization.py
 ```
+
 ## Package Dependencies
 Create conda environment then install the following:
 ```bash
