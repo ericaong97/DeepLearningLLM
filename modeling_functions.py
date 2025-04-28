@@ -223,8 +223,8 @@ def train_transformer_teacher_forcing(model, train_loader, val_loader,
     if use_early_stopping and os.path.exists(best_model_path):
         print(f"Loading best model with validation loss: {best_val_loss:.4f}")
         model.load_state_dict(torch.load(best_model_path))
-    
-    with open(f"{filename}_history.json", 'w') as f:
+    history_path = 'histories'
+    with open(f"{history_path}/{filename}_history.json", 'w') as f:
         json.dump(history, f, indent=4)
     return history
 
