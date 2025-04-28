@@ -3,6 +3,18 @@ import torch.nn as nn
 import random
 from baseline_transformer_architecture import PositionalEncoding
 
+import torch
+import torch.nn as nn
+from data_utils import get_train_loader, get_val_loader, get_test_loader, set_seed
+from modeling_functions import train_transformer_teacher_forcing
+from optimizer_scheduler import get_optimizer, get_plateau_scheduler, linear_teacher_scheduler
+from tokenizers import Tokenizer
+from tqdm.auto import tqdm
+import json
+import matplotlib.pyplot as plt
+from rouge_score import rouge_scorer
+import visualization
+
 class weight_tying_Transformer(nn.Module):
     def __init__(self, d_model=512, nhead=8, num_encoder_layers=4,
                 num_decoder_layers=4, dim_feedforward=2048, 
@@ -167,4 +179,47 @@ def create_small_weight_tied_transformer(d_model=512, nhead=8, num_encoder_layer
         dim_feedforward=dim_feedforward,
         dropout=dropout,
         vocab_size=vocab_size
+    )
+    
+if __name__ == "__main__":
+    torch.cuda.empty_cache()
+    set_seed(42)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    config = {
+        "vocab_size": 20000,
+        "dropout": 0.1,
+        "d_model": 384,
+        "nhead": 6,
+        "num_encoder_layers": 4,
+        "num_decoder_layers": 4,
+        "dim_feedforward": 1536
+    }
+
+    tokenizer = Tokenizer.from_file("cnn_bpe_tokenizer_20k.json")
+    pad_idx = tokenizer.token_to_id("[PAD]")
+
+    model = create_small_weight_tied_transformer(**config).to(device)
+    optimizer = get_optimizer(model)
+    plateau_scheduler = get_plateau_scheduler(optimizer)
+    teacher_scheduler = linear_teacher_scheduler
+    criterion = torch.nn.CrossEntropyLoss(ignore_index=pad_idx)
+
+    train_loader = get_train_loader(tokenizer, batch_size=32, num_workers=2)
+    val_loader = get_val_loader(tokenizer, batch_size=4, num_workers=0)
+    test_loader = get_test_loader(tokenizer, batch_size=4, num_workers=0)
+
+    history = train_transformer_teacher_forcing(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        optimizer=optimizer,
+        plateau_scheduler=plateau_scheduler,
+        teacher_forcing_scheduler=teacher_scheduler,
+        criterion=criterion,
+        device=device,
+        num_epochs=5,
+        filename="weighy_tying_model",
+        tokenizer=tokenizer,
+        pad_idx=pad_idx
     )
