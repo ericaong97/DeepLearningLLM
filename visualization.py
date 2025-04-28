@@ -4,6 +4,7 @@ visualization.py - Visualization utilities for training metrics
 import matplotlib.pyplot as plt
 import numpy as np
 import json
+import os
 
 # 1. loading JSON data
 def load_history(json_path):
@@ -155,6 +156,10 @@ def visualize_aaai_twocolumn(history, save_path='training_plot.png'):
 # ==============================================
 if __name__ == "__main__":
     # Example usage when run directly: please change to your file name and desired picture name for output
-    history = load_history("updated_baseline_history.json")
-    # visualize_aaai_twocolumn(history, save_path="sample_training_plot_2.png")
-    visualize_training_dynamics(history, save_path="baseline_losses_wide.png")
+    history_path = 'histories/' # Path to the history JSON file
+    plot_path = 'plots/' # Path to save the plots
+    history_name = 'weight_pruning_history.json' # Name of the history file in json format
+    plot_name = 'weight_pruning_losses_wide.png' # Name of the output plot
+
+    history = load_history(os.path.join(history_path, "weight_pruning_history.json"))
+    visualize_training_dynamics(history, os.path.join(plot_path, "weight_pruning_losses_wide.png"))
